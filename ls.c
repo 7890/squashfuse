@@ -37,7 +37,7 @@
 
 static void usage() {
 	fprintf(stderr, "%s (c) 2013 Dave Vasilevsky\n\n", PROGNAME);
-	fprintf(stderr, "Usage: %s ARCHIVE\n", PROGNAME);
+	fprintf(stderr, "Usage: %s ARCHIVE (OFFSET)\n", PROGNAME);
 	exit(ERR_USAGE);
 }
 
@@ -51,12 +51,16 @@ int main(int argc, char *argv[]) {
 	sqfs_traverse trv;
 	sqfs fs;
 	char *image;
+	size_t offset=0;
 
-	if (argc != 2)
+	if (argc < 2)
 		usage();
 	image = argv[1];
 
-	if ((err = sqfs_open_image(&fs, image, 0)))
+	if (argc > 2)
+		offset=atoi(argv[2]);
+
+	if ((err = sqfs_open_image(&fs, image, offset)))
 		exit(ERR_OPEN);
 	
 	if ((err = sqfs_traverse_open(&trv, &fs, sqfs_inode_root(&fs))))
