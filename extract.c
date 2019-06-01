@@ -16,7 +16,7 @@
 #define ERR_OPEN	(3)
 
 static void usage() {
-    fprintf(stderr, "Usage: %s ARCHIVE PATH_TO_EXTRACT\n", PROGNAME);
+    fprintf(stderr, "Usage: %s ARCHIVE PATH_TO_EXTRACT (OFFSET)\n", PROGNAME);
     fprintf(stderr, "       %s ARCHIVE -a\n", PROGNAME);
     exit(ERR_USAGE);
 }
@@ -77,6 +77,7 @@ int main(int argc, char *argv[]) {
     char *prefix;
     char prefixed_path_to_extract[1024];
     struct stat st;
+    size_t offset=0;
     
     prefix = "squashfs-root/";
     
@@ -87,12 +88,15 @@ int main(int argc, char *argv[]) {
         }
     }
     
-    if (argc != 3)
+    if (argc < 3)
         usage();
     image = argv[1];
     path_to_extract = argv[2];
     
-    if ((err = sqfs_open_image(&fs, image, 0)))
+    if (argc > 3)
+        offset=atoi(argv[3]);
+
+    if ((err = sqfs_open_image(&fs, image, offset)))
         exit(ERR_OPEN);
     
     if ((err = sqfs_traverse_open(&trv, &fs, sqfs_inode_root(&fs))))
