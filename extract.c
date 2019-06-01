@@ -7,7 +7,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include "squashfs_fs.h"
-
+#include "nonstd.h"
 
 #define PROGNAME "squashfuse_extract"
 
