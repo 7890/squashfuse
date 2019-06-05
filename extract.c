@@ -6,18 +6,24 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <errno.h>
+#include <libgen.h> //dirname
 #include "squashfs_fs.h"
 #include "nonstd.h"
 
 #define PROGNAME "squashfuse_extract"
+#define EXTRACTION_PREFIX "squashfs-root/"
+#define DIR_MODE 0777
 
 #define ERR_MISC	(1)
 #define ERR_USAGE	(2)
 #define ERR_OPEN	(3)
 
 static void usage() {
-    fprintf(stderr, "Usage: %s ARCHIVE PATH_TO_EXTRACT (OFFSET)\n", PROGNAME);
+    fprintf(stderr, "Usage: %s ARCHIVE PATH_TO_EXTRACT (OFFSET (EXTRACTION_PREFIX))\n", PROGNAME);
     fprintf(stderr, "       %s ARCHIVE -a\n", PROGNAME);
+    fprintf(stderr, "Default OFFSET is 0 (start of file).\n");
+    fprintf(stderr, "Default EXTRACTION_PREFIX is '%s'.\n", EXTRACTION_PREFIX);
     exit(ERR_USAGE);
 }
 
@@ -68,6 +74,14 @@ sqfs_err sqfs_stat(sqfs *fs, sqfs_inode *inode, struct stat *st) {
 	return SQFS_OK;
 }
 
+int mkpath(char *dir, mode_t mode)
+{
+	char cmd[2048];
+	snprintf(cmd, 2048, "mkdir -p \"%s\"", dir);
+	fprintf(stderr, "%s\n", cmd);
+	return system(cmd);
+}
+
 int main(int argc, char *argv[]) {
     sqfs_err err = SQFS_OK;
     sqfs_traverse trv;
@@ -79,22 +93,25 @@ int main(int argc, char *argv[]) {
     struct stat st;
     size_t offset=0;
     
-    prefix = "squashfs-root/";
-    
-    if (access(prefix, F_OK ) == -1 ) {
-        if (mkdir(prefix, 0777) == -1) {
-            perror("mkdir error");
-            exit(EXIT_FAILURE);
-        }
-    }
-    
     if (argc < 3)
         usage();
     image = argv[1];
     path_to_extract = argv[2];
     
     if (argc > 3)
-        offset=atoi(argv[3]);
+        offset = atoi(argv[3]);
+
+    if (argc > 4)
+        prefix = argv[4];
+    else
+        prefix = EXTRACTION_PREFIX;
+
+    if (access(prefix, F_OK ) == -1 ) {
+        if (mkpath(prefix, DIR_MODE) == -1) {
+            perror("mkdir error");
+            exit(EXIT_FAILURE);
+        }
+    }
 
     if ((err = sqfs_open_image(&fs, image, offset)))
         exit(ERR_OPEN);
@@ -115,9 +132,8 @@ int main(int argc, char *argv[]) {
                 strcat(strcat(prefixed_path_to_extract, prefix), trv.path);
                 if (inode.base.inode_type == SQUASHFS_DIR_TYPE){
                     fprintf(stderr, "inode.xtra.dir.parent_inode: %ui\n", inode.xtra.dir.parent_inode);
-                    fprintf(stderr, "mkdir: %s/\n", prefixed_path_to_extract);
                     if (access(prefixed_path_to_extract, F_OK ) == -1 ) {
-                        if (mkdir(prefixed_path_to_extract, 0777) == -1) {
+                        if (mkpath(prefixed_path_to_extract, DIR_MODE) == -1) {
                             perror("mkdir error");
                             exit(1);
                         }
@@ -143,6 +159,16 @@ int main(int argc, char *argv[]) {
                     off_t bytes_already_read = 0;
                     sqfs_off_t bytes_at_a_time = 64*1024;
                     FILE * f;
+                    char prefixed_path[1024];
+                    memcpy(prefixed_path, (char*)prefixed_path_to_extract, 1024);
+                    prefixed_path[1023]='\0';
+                    dirname(prefixed_path);
+                    if (access(prefixed_path, F_OK ) == -1 ) {
+                        if (mkpath(prefixed_path, DIR_MODE) == -1) {
+                            perror("mkdir error");
+                            exit(EXIT_FAILURE);
+                        }
+                    }
                     f = fopen (prefixed_path_to_extract, "w+");
                     if (f == NULL)
                         die("fopen error");
@@ -165,6 +191,16 @@ int main(int argc, char *argv[]) {
                         die("sqfs_readlink error");
                     fprintf(stderr, "Symlink: %s to %s \n", prefixed_path_to_extract, buf);
                     unlink(prefixed_path_to_extract);
+                    char prefixed_path[1024];
+                    memcpy(prefixed_path, (char*)prefixed_path_to_extract, 1024);
+                    prefixed_path[1023]='\0';
+                    dirname(prefixed_path);
+                    if (access(prefixed_path, F_OK ) == -1 ) {
+                        if (mkpath(prefixed_path, DIR_MODE) == -1) {
+                            perror("mkdir error");
+                            exit(EXIT_FAILURE);
+                        }
+                    }
                     ret = symlink(buf, prefixed_path_to_extract);
                     if (ret != 0)
                         die("symlink error");
